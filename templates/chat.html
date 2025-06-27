@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Secure Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
+        .message { margin: 5px 0; }
+        .message.sent { text-align: right; color: blue; }
+        .message.received { text-align: left; color: green; }
+        #message-input { width: 80%; padding: 5px; }
+        #send-button { padding: 5px 10px; }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const userId = {{ user.id }};
+            const contactId = {{ contact.id }};
+            const contactName = "{{ contact.name }}";
+            let lastMessageId = 0;
+
+            // Hàm gửi tin nhắn
+            function sendMessage() {
+                const message = $('#message-input').val();
+                if (!message) return;
+                $.ajax({
+                    url: '/send_message',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ receiver_id: contactId, message: message }),
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            $('#message-input').val('');
+                            loadMessages();
+                        } else {
+                            alert('Failed to send message: ' + response.message);
+                        }
+                    },
+                    error: function() {
+                        alert('Error sending message');
+                    }
+                });
+            }
+
+            // Hàm tải tin nhắn
+            function loadMessages() {
+                $.ajax({
+                    url: '/get_messages/' + contactId,
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            $('#chat-container').empty();
+                            response.messages.forEach(function(msg) {
+                                const isSent = msg.sender_id === userId;
+                                const messageClass = isSent ? 'sent' : 'received';
+                                const senderName = isSent ? 'You' : msg.sender_name;
+                                $('#chat-container').append(
+                                    `<div class="message ${messageClass}">${senderName} (${msg.created_at}): ${msg.plaintext}</div>`
+                                );
+                                lastMessageId = Math.max(lastMessageId, msg.id);
+                            });
+                            $('#chat-container').scrollTop($('#chat-container')[0].scrollHeight);
+                        }
+                    }
+                });
+            }
+
+            // Gửi tin nhắn khi nhấn nút hoặc Enter
+            $('#send-button').click(sendMessage);
+            $('#message-input').keypress(function(e) {
+                if (e.which === 13) sendMessage();
+            });
+
+            // Tải tin nhắn ban đầu và kiểm tra tin nhắn mới mỗi 2 giây
+            loadMessages();
+            setInterval(loadMessages, 2000);
+        });
+    </script>
+</head>
+<body>
+    <h1>Chat with {{ contact.name }}</h1>
+    <a href="{{ url_for('routes.index') }}">Back to Contacts</a>
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    <div id="chat-container"></div>
+    <input type="text" id="message-input" placeholder="Type your message...">
+    <button id="send-button">Send</button>
+</body>
+</html>
